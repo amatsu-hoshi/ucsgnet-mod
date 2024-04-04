@@ -1,0 +1,22 @@
+misc: 
+  name: 2shapes
+training:
+  lr: 1e-3
+  max_steps: 100000
+model:
+  N_points: 4096
+  w_translation_loss: 1e-2
+  w_scaling_loss: 1e-2
+  w_positive_parameter_loss: 1
+  w_recon_loss: 1
+  shape: 
+    shape_type: box
+    operator: intersection
+    leftop: 
+      shape_type: box
+      params: [0.8, 0.8, 0.8]
+      translation: [0, 0, 0]
+    rightop: 
+      shape_type: sphere
+      params: 0.4
+      translation: [0.1, 0.1, 0.1]
