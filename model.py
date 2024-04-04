@@ -20,13 +20,15 @@ def occupancy_operator(operator: str, leftop: torch.Tensor, rightop: torch.Tenso
 class CSGTree: 
     def __init__(self, tree_structure, number_of_shapes) -> None:
         if getattr(tree_structure, "leftop", None) is not None: 
+            # Non-leaf nodes
             self.leftop = CSGTree(tree_structure.leftop, number_of_shapes) 
             self.rightop = CSGTree(tree_structure.rightop, number_of_shapes)
             self.operator = tree_structure.operator
-            self.shape_type = 'non-leaf' 
         else: 
+            # Basic shapes
             self.shape_type = tree_structure.shape_type
             if self.shape_type in number_of_shapes.keys(): 
+                # index in its type
                 self.id = number_of_shapes[self.shape_type]
                 number_of_shapes[self.shape_type] += 1
             else: 
@@ -34,14 +36,18 @@ class CSGTree:
                 number_of_shapes[self.shape_type] = 1
 
     def compute_id(self, number_of_shapes: dict): 
-        for shape_type, num_shapes in number_of_shapes.items(): 
-            if shape_type != self.shape_type: 
-                self.id += num_shapes
-            else:
-                break
+        if getattr(self, "shape_type", None) is None:
+            self.leftop.compute_id(number_of_shapes)
+            self.rightop.compute_id(number_of_shapes)
+        else: 
+            for shape_type, num_shapes in number_of_shapes.items(): 
+                if shape_type != self.shape_type: 
+                    self.id += num_shapes
+                else:
+                    break
 
     def evaluate(self, base_shapes): 
-        if self.shape_type == 'non-leaf': 
+        if getattr(self, "shape_type", None) is None: 
             return occupancy_operator(self.operator, self.leftop.evaluate(base_shapes), self.rightop.evaluate(base_shapes))
         else: 
             return base_shapes[..., self.id]
@@ -54,6 +60,8 @@ class CSGNet(nn.Module):
         super().__init__()
         number_of_shapes = {}
         self.csg_tree = CSGTree(hparams.shape, number_of_shapes)
+        # map nodes in csg_tree to indices base_shapes, must call this in before evaluation
+        self.csg_tree.compute_id(number_of_shapes)
         self.evaluator_ = create_compound_evaluator(number_of_shapes, 3)
         self.scaler_ = Scaler()
         self.w_translation_loss = hparams.w_translation_loss
@@ -79,11 +87,12 @@ class CSGNet(nn.Module):
         )  # -> batch, num_points, num_shapes
 
         scaled_shapes = 1 - self.scaler_(base_shapes)
-        pred = self.csg_tree.evaluate(scaled_shapes)
+        occupancies_pred = self.csg_tree.evaluate(scaled_shapes)
+        occupancies_pred = torch.clamp(occupancies_pred, min=0, max=1)
         translation_loss = get_translation_loss(self.evaluator_)
         positive_parameter_loss = get_positive_parameter_loss(self.evaluator_)
         scaling_loss = get_scaling_loss(self.scaler_)
-        recon_loss = get_recon_loss(pred, occupancies)
+        recon_loss = get_recon_loss(occupancies_pred, occupancies)
         loss = (
             translation_loss * self.w_translation_loss + 
             scaling_loss * self.w_scaling_loss + 

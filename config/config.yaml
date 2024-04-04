@@ -1,22 +1,37 @@
 misc: 
-  name: 2shapes
+  name: ucsgnet
 training:
   lr: 1e-3
   max_steps: 100000
 model:
   N_points: 4096
+  balanced: True
+
+  # Loss weights
   w_translation_loss: 1e-2
   w_scaling_loss: 1e-2
   w_positive_parameter_loss: 1
   w_recon_loss: 1
+
+  # The CSG Program to be fitted
+  # Non-leaf nodes of the CSG Tree have "operator", "leftop", and "leftop" attributes
+  # Leaf nodes have "shape type", "params", and "translation" attributes
+  # TODO: Add support for rotation
   shape: 
-    shape_type: box
-    operator: intersection
+    # union, intersection, or difference
+    operator: union
     leftop: 
-      shape_type: box
-      params: [0.8, 0.8, 0.8]
-      translation: [0, 0, 0]
+      # can be box or sphere
+      operator: intersection
+      leftop: 
+        shape_type: box
+        params: [1, 1, 1]
+        translation: [0, 0, 0]
+      rightop: 
+        shape_type: sphere
+        params: 0.5
+        translation: [0, 0, 0.1]
     rightop: 
       shape_type: sphere
-      params: 0.4
-      translation: [0.1, 0.1, 0.1]
+      params: 0.5
+      translation: [0.1, 0, 0]
